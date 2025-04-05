@@ -1,132 +1,105 @@
+# Figure 4 – Compare the number of binder peptides for HLA-A*29:01 and HLA-B*50:01
+
+# Load libraries
 library(readxl)
-library(ggplot2)
-library(ggpubr)
-
-
-skin_b50 <- read_excel("median_gene_expression.xlsx", sheet = "HLA-B5001")
-skin_a29 <- read_excel("median_gene_expression.xlsx", sheet = "HLA-A2901")
-lung_b50 <- read_excel("median_gene_expression_lung_count.xlsx", sheet = "try")
-lung_a29 <- read_excel("median_gene_expression_lung_count.xlsx", sheet = "HLA-A2901")
-housekeeping_b50 <- read_excel("median_gene_expression.xlsx", sheet = "HK-B5001")
-housekeeping_a29 <- read_excel("median_gene_expression.xlsx", sheet = "HK-A2901")
-
-colnames(housekeeping_b50)
-# Add a column to identify group
-skin_b50$group <- "Skin–HLA-B*50:01"
-skin_a29$group <- "Skin–HLA-A*29:01"
-lung_b50$group <- "Lung–HLA-B*50:01"
-lung_a29$group <- "Lung–HLA-A*29:01"
-
-
-colnames(housekeeping_a29)
-colnames(skin_b50)[13] <- "predicted binders" #NetMHCpan predicted total binders
-colnames(skin_a29)[13] <- "predicted binders"
-colnames(lung_b50)[9] <- "predicted binders"
-colnames(lung_a29)[9] <- "predicted binders"
-colnames(housekeeping_b50)[6] <- "predicted binders"
-colnames(housekeeping_a29)[6] <- "predicted binders"
-
-
-# Select only relevant columns and add a group label
-skin_b50 <- skin_b50[, c("gene_name" ,"predicted binders")]
-skin_b50$group <- "Skin–HLA-B*50:01"
-
-skin_a29 <- skin_a29[, c("gene_name", "predicted binders")]
-skin_a29$group <- "Skin–HLA-A*29:01"
-
-lung_b50 <- lung_b50[, c("gene_name","predicted binders")]
-lung_b50$group <- "Lung–HLA-B*50:01"
-
-lung_a29 <- lung_a29[, c( "gene_name","predicted binders")]
-lung_a29$group <- "Lung–HLA-A*29:01"
-
-housekeeping_b50 <- housekeeping_b50[, c("Gene", "predicted binders")]
-housekeeping_b50$group <- "Housekeeping–HLA-B*50:01"
-
-housekeeping_a29<- housekeeping_a29[, c("Gene", "predicted binders")]
-housekeeping_a29$group <- "Housekeeping–HLA-A*29:01"
-
-data <- rbind(skin_b50, skin_a29, lung_b50, lung_a29, housekeeping_a29, housekeeping_b50)
-
-skin_df <- data.frame(
-  subject = 1:101,
-  A29 = skin_a29$`predicted binders`[1:101],
-  B50 = skin_b50$`predicted binders`[1:101],
-  protein_type = "Skin"
-)
-
-lung_df <- data.frame(
-  subject = 1:102,
-  A29 = lung_a29$`predicted binders`[1:102],
-  B50 = lung_b50$`predicted binders`[1:102],
-  protein_type = "Lung"
-)
-
-house_df <- data.frame(
-  subject = 1:101,
-  A29 = housekeeping_a29$`predicted binders`[1:101],
-  B50 = housekeeping_b50$`predicted binders`[1:101],
-  protein_type = "Housekeeping"
-)
-
 library(dplyr)
 library(tidyr)
+library(ggplot2)
 
-combined_df <- bind_rows(skin_df, lung_df, house_df)
+# Helper to load and label data from Excel
+load_and_label <- function(file, sheet, group) {
+  df <- read_excel(file, sheet = sheet)
+  
+  df <- df %>%
+    select(
+      gene_name = `Gene name`,
+      binders = starts_with("Predicted total binders")
+    ) %>%
+    mutate(group = group)
+  
+  return(df)
+}
 
-long_df <- combined_df %>%
-  pivot_longer(cols = c(A29, B50), names_to = "group", values_to = "binders")
+# Load datasets from cleaned Excel
+file <- "Binding_peptide_numbers.xlsx"
+skin_b50 <- load_and_label(file, "(S)HLA-B5001", "Skin–HLA-B*50:01")
+skin_a29 <- load_and_label(file, "(S)HLA-A2901", "Skin–HLA-A*29:01")
+lung_b50 <- load_and_label(file, "(L)HLA-B5001", "Lung–HLA-B*50:01")
+lung_a29 <- load_and_label(file, "(L)HLA-A2901", "Lung–HLA-A*29:01")
+house_b50 <- load_and_label(file, "(HK)HLA-B5001", "Housekeeping–HLA-B*50:01")
+house_a29 <- load_and_label(file, "(HK)HLA-A2901", "Housekeeping–HLA-A*29:01")
+
+# Create paired subject-wise data
+create_paired_group <- function(a29, b50, group_label) {
+  n <- min(nrow(a29), nrow(b50))
+  data.frame(
+    subject = 1:n,
+    A29 = a29$binders[1:n],
+    B50 = b50$binders[1:n],
+    protein_type = group_label
+  )
+}
+
+str(skin_a29)
+str(skin_b50)
+
+skin_df <- create_paired_group(skin_a29, skin_b50, "Skin")
+lung_df <- create_paired_group(lung_a29, lung_b50, "Lung")
+house_df <- create_paired_group(house_a29, house_b50, "Housekeeping")
+
+# Combine and reshape to long format
+long_df <- bind_rows(skin_df, lung_df, house_df) %>%
+  pivot_longer(cols = c(A29, B50), names_to = "group", values_to = "binders") %>%
+  mutate(group = recode(group, "A29" = "HLA-A*29:01", "B50" = "HLA-B*50:01"))
+
+# Run Wilcoxon tests and prepare annotation
+get_pval <- function(a29, b50) {
+  n <- min(nrow(a29), nrow(b50))
+  wilcox.test(a29$binders[1:n], b50$binders[1:n], paired = TRUE)$p.value
+}
 
 pvals <- data.frame(
   protein_type = c("Skin", "Lung", "Housekeeping"),
   p_value = c(
-    wilcox.test(skin_a29$`predicted binders`[1:101], skin_b50$`predicted binders`[1:101], paired = TRUE)$p.value,
-    wilcox.test(lung_a29$`predicted binders`[1:102], lung_b50$`predicted binders`[1:102], paired = TRUE)$p.value,
-    wilcox.test(housekeeping_a29$`predicted binders`[1:101], housekeeping_b50$`predicted binders`[1:101], paired = TRUE)$p.value
+    get_pval(skin_a29, skin_b50),
+    get_pval(lung_a29, lung_b50),
+    get_pval(house_a29, house_b50)
   )
-)
+) %>%
+  mutate(
+    label = case_when(
+      p_value <= 0.001 ~ "***",
+      p_value <= 0.01  ~ "**",
+      p_value <= 0.05  ~ "*",
+      TRUE ~ "ns"
+    ),
+    x = 1,
+    xend = 2,
+    y = 165,
+    y_text = 167
+  )
 
-# Optional: format p-values
-pvals$label <- ifelse(pvals$p_value < 0.001, "***",
-                      ifelse(pvals$p_value < 0.01, "**",
-                             ifelse(pvals$p_value < 0.05, "*", "ns")))
-
-# Rename A29 and B50
-long_df_clean <- long_df %>%
-  mutate(group = recode(group,
-                        "A29" = "HLA-A*29:01",
-                        "B50" = "HLA-B*50:01"))
-
-
-# Define colors
-protein_colors <- c(
-  "Skin" = "#fc8d62",         # orange
-  "Lung" = "#66c2a5",         # green
-  "Housekeeping" = "#e78ac3"  # pink
-)
-
-
-# Set facet order
-long_df_clean$protein_type <- factor(long_df_clean$protein_type, levels = c("Skin", "Lung", "Housekeeping"))
-
-
-ggplot(long_df_clean, aes(x = group, y = binders, group = group)) +
+# Final plot
+ggplot(long_df, aes(x = group, y = binders)) +
   geom_line(aes(group = subject), color = "gray80", alpha = 0.5, size = 0.3) +
   geom_point(aes(color = protein_type), size = 2, alpha = 0.6, position = position_jitter(width = 0.1)) +
   stat_summary(fun = median, geom = "crossbar", width = 0.4, color = "black", size = 0.5) +
-  facet_wrap(~protein_type, scales = "fixed") +
-  theme_minimal(base_size = 14) +
-  labs(
-    x = NULL,
-    y = "Predicted binders",
-    title = "Predicted number of binders for HLA-A29:01 and HLA-B50:01\nacross distinct peptide groups"
-  ) +
+  facet_wrap(~protein_type) +
   scale_color_manual(values = c(
     "Skin" = "#fc8d62",
     "Lung" = "#66c2a5",
     "Housekeeping" = "#e78ac3"
   )) +
-  coord_cartesian(ylim = c(0, 150))+
+  coord_cartesian(ylim = c(0, 170)) +
+  geom_text(data = pvals, aes(x = 1.5, y = y_text, label = label), inherit.aes = FALSE, size = 6) +
+  geom_segment(data = pvals, aes(x = x, xend = xend, y = y, yend = y), inherit.aes = FALSE, size = 0.6) +
+  geom_segment(data = pvals, aes(x = x, xend = x, y = y, yend = y - 3), inherit.aes = FALSE, size = 0.6) +
+  geom_segment(data = pvals, aes(x = xend, xend = xend, y = y, yend = y - 3), inherit.aes = FALSE, size = 0.6) +
+  labs(
+    x = NULL,
+    y = "Predicted binders",
+    title = "Predicted number of binders for HLA-A29:01 and HLA-B50:01\nacross distinct peptide groups"
+  ) +
   theme_classic(base_size = 14) +
   theme(
     strip.background = element_blank(),
@@ -136,32 +109,4 @@ ggplot(long_df_clean, aes(x = group, y = binders, group = group)) +
     axis.ticks = element_line(color = "black"),
     legend.position = "none",
     plot.title = element_text(hjust = 0.5, face = "bold")
-  )  + geom_text(
-    data = pvals,
-    aes(x = 1.5, y = max(long_df_clean$binders, na.rm = TRUE) * 0.5, label = label),
-    inherit.aes = FALSE,
-    size = 6
-  ) +
-  geom_text(
-    data = pvals,
-    aes(x = 1.5, y = 152, label = label),
-    inherit.aes = FALSE,
-    size = 6
-  ) +
-  geom_segment(
-    data = pvals,
-    aes(x = 1, xend = 2, y = 150, yend = 150),
-    inherit.aes = FALSE,
-    size = 0.6
-  ) +
-  geom_segment(
-    data = pvals,
-    aes(x = 1, xend = 1, y = 150, yend = 147),
-    inherit.aes = FALSE,
-    size = 0.6
-  ) +
-  geom_segment(
-    data = pvals,
-    aes(x = 2, xend = 2, y = 150, yend = 147),
-    inherit.aes = FALSE,
-    size = 0.6)
+  )
