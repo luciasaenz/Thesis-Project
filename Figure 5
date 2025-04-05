@@ -1,0 +1,9 @@
+# Compare the binding affinities between the updated and Van Allen predictions
+
+filtered_data <- compared_predictions[compared_predictions$Same_best_HLA == TRUE, ] #Filter to only rows where "same best hla allele" is TRUE, to be able to make a pairwise comparaison
+
+filtered_data$Lowest_Affinity_nM <- as.numeric(as.character(filtered_data$Lowest_Affinity_nM)) # Convert columns to numeric
+filtered_data$affinity_van_Allen <- as.numeric(as.character(filtered_data$affinity_van_Allen)) # Convert columns to numeric
+clean_data <- na.omit(filtered_data[, c("Lowest_Affinity_nM", "affinity_van_Allen")]) # Remove NA values
+
+wilcox.test(clean_data$Lowest_Affinity_nM, clean_data$affinity_van_Allen, paired=TRUE) ## Run a paired Wilcoxon test
