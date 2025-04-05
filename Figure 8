@@ -1,71 +1,71 @@
-# Plotting the relative frequency of each HLA Class I allele in our discovery cohort
+# Plotting the relative frequencies of each HLA Class I allele in both discovery and validation cohorts
 
 # Load necessary libraries
 library(readxl)
-library(tidyverse)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(scales)
+library(ggtext)
 
-Discovery <- read_excel("NIHMS817344-supplement-Table_S2.xlsx", sheet = "exome analysis (n=110)") # Read the discovery cohort file
+# Function to process allele data
+process_alleles <- function(alleles_vector, is_validation = FALSE) {
+  if (is_validation) {
+    alleles_vector <- str_split(alleles_vector, ",", simplify = FALSE) %>% unlist()
+  }
+  
+  as.data.frame(table(alleles_vector)) %>%
+    mutate(
+      Freq = as.numeric(Freq),
+      Percent = Freq / sum(Freq) * 100,
+      alleles = toupper(alleles_vector),
+      
+      # Proper official formatting: HLA-A*29:01
+      official_allele = case_when(
+        grepl("^HLA-[ABC]\\d{2}:\\d{2}$", alleles) ~ {
+          prefix <- substr(alleles, 1, 5)       # "HLA-A"
+          suffix <- substr(alleles, 6, nchar(alleles))  # "29:01"
+          paste0(prefix, "*", suffix)
+          },
+        grepl("^[ABC]\\d{4}$", alleles) ~ paste0(
+          "HLA-", substr(alleles, 1, 1), "*",
+          substr(alleles, 2, 3), ":", substr(alleles, 4, 5)
+        ),
+        TRUE ~ NA_character_
+      ),
+      
+      color = case_when(
+        official_allele == "HLA-A*29:01" ~ "red",
+        official_allele == "HLA-B*50:01" ~ "#228B22",
+        TRUE ~ "#56B4E9"
+      ),
+      label_color = case_when(
+        official_allele == "HLA-A*29:01" ~ "red",
+        official_allele == "HLA-B*50:01" ~ "#228B22",
+        TRUE ~ "black"
+      ),
+      label_html = case_when(
+        official_allele == "HLA-A*29:01" ~ paste0("<span style='color:red'><b>", official_allele, "</b></span>"),
+        official_allele == "HLA-B*50:01" ~ paste0("<span style='color:#228B22'><b>", official_allele, "</b></span>"),
+        TRUE ~ paste0("<span style='color:black'>", official_allele, "</span>")
+      )
+    ) %>%
+    arrange(desc(Percent))
+}
 
-# Extract HLA allele columns and count frequency
-hla_cols <- df %>% select(`hla.a1`, `hla.a2`, `hla.b1`, `hla.b2`, `hla.c1`, `hla.c2`)
-alleles <- unlist(hla_cols)
 
-# Create a data frame with relative frequencies
-allele_freq <- as.data.frame(table(alleles)) %>%
-  mutate(Percent = Freq / sum(Freq) * 100) %>%
-  arrange(desc(Percent))
+# Discovery Cohort
+discovery <- read_excel("discovery_data.xlsx")
+hla_cols <- discovery %>% select(`hla.a1`, `hla.a2`, `hla.b1`, `hla.b2`, `hla.c1`, `hla.c2`)
+discovery_alleles <- unlist(hla_cols)
+discovery_freq <- process_alleles(discovery_alleles)
 
-# Plot relative HLA frequencies
-ggplot(allele_freq, aes(x = reorder(alleles, -Percent), y = Percent)) +
-  geom_bar(stat = "identity", fill = "#56B4E9", width = 0.8) +
-  scale_y_continuous(expand = c(0, 0), labels = scales::percent_format(scale = 1)) +
-  labs(
-    title = "Relative Frequency of HLA Alleles in the Discovery Cohort",
-    x = "HLA Alleles",
-    y = "Relative frequencies (%)"
-  ) +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major.y = element_line(color = "grey90"),
-    panel.grid.minor.y = element_blank(),
-    panel.grid.major.x = element_blank(),
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 10),
-    axis.title = element_text(size = 12, face = "bold"),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-    axis.line = element_line(color = "black")
-  )
+plot_hla_frequencies(discovery_freq, "Relative Frequency of HLA Alleles in the Discovery Cohort")
 
-#We repeat the same process to plot the relative HLA Class I alleles for the validation cohort
+# Validation Cohort
+validation <- read_excel("validation_data.xlsx")
+validation_freq <- process_alleles(validation$`HLA Class I Alleles`, is_validation = TRUE)
 
-validation <- read_excel("NIHMS980063-supplement-Supplemental_Table_S1.xlsx", sheet = "Cohort 1")
+plot_hla_frequencies(validation_freq, "Relative Frequency of HLA Alleles in the Validation Cohort")
 
-# Split the comma-separated HLA Class I alleles
-alleles <- df$`HLA Class I Alleles` %>%
-  str_split(",", simplify = FALSE) %>%
-  unlist()
-
-# Create frequency table with percentages
-allele_freq <- as.data.frame(table(alleles)) %>%
-  mutate(Percent = Freq / sum(Freq) * 100) %>%
-  arrange(desc(Percent))
-
-# Plot
-ggplot(allele_freq, aes(x = reorder(alleles, -Percent), y = Percent)) +
-  geom_bar(stat = "identity", fill = "#56B4E9", width = 0.8) +
-  scale_y_continuous(expand = c(0, 0), labels = scales::percent_format(scale = 1)) +
-  labs(
-    title = "Relative Frequency of HLA Class I Alleles in the Validation Cohort",
-    x = "HLA Class I Alleles",
-    y = "Relative Frequency (%)"
-  ) +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major.y = element_line(color = "grey90"),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 10),
-    axis.title = element_text(size = 12, face = "bold"),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-    axis.line = element_line(color = "black")
-  )
-
+                                 
