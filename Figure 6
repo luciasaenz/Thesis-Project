@@ -1,0 +1,75 @@
+#Compare the neoantigen binding affinities for HLA-A*29:01 and HLA-B*50:01
+
+ba_predictions <- read_excel("Final_BA_predictions_rev.xlsx") #read the file containing the updated binding affinities
+
+# Filter rows where the lowest affinity corresponds to HLA-A*29:01
+hla_a29_lowest_affinity <- ba_predictions %>%
+  filter(Lowest_Affinity_HLA == "HLA-A*29:01") %>%
+  select(Lowest_Affinity_nM)
+
+as.numeric(hla_a29_lowest_affinity$Lowest_Affinity_nM)
+
+# Filter rows where the lowest affinity corresponds to HLA-B*50:01
+hla_b50_lowest_affinity <- ba_predictions %>%
+  filter(Lowest_Affinity_HLA == "HLA-B*50:01") %>%
+  select(Lowest_Affinity_nM)
+
+as.numeric(hla_b50_lowest_affinity$Lowest_Affinity_nM)
+
+b50_df <- data.frame(
+  allele = "HLA-B50:01",
+  affinity = hla_b50_lowest_affinity
+)
+
+a29_df <- data.frame(
+  allele = "HLA-A29:01",
+  affinity = hla_a29_lowest_affinity
+)
+
+affinity_df <- rbind(b50_df, a29_df)
+
+#Mann-Whitney U test:  test the difference between the binding affinity of our two alleles (only in the case that they are the top binders for each neoantigen)
+
+wilcox.test(hla_b50_lowest_affinity, hla_a29_lowest_affinity, alternative = "two.sided") 
+wilcox.test(hla_b50_lowest_affinity, hla_a29_lowest_affinity, alternative = "greater") #one-sided test, to test wether HLA*B50:01 needs more neoantigen concentration to bind
+
+#try to make a loop that depending on the p-value, it gives a different label
+pval_annot <- data.frame(
+  x_start = 1,
+  x_end = 2,
+  y = 8500,  # slightly above top
+  label = "***"
+)
+
+#Visualizing the difference in binding affinity and their significance
+
+ggplot(affinity_df, aes(x = allele, y = Lowest_Affinity_nM, fill = allele)) +
+  geom_violin(trim = FALSE, width = 0.9, color = NA) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.4, color = "black") +
+  coord_cartesian(ylim = c(0, 9000)) +
+  theme_classic(base_size = 14) +
+  scale_fill_manual(values = c("HLA-B50:01" = "#fc8d62", "HLA-A29:01" = "#fc8d62")) +
+  labs(x = NULL, y = "Predicted binding affinity (nM)", title = "Binding affinity comparison between \nHLA-A29:01 and HLA-B50:01") +
+  geom_segment(data = pval_annot,
+               aes(x = x_start, xend = x_end, y = y, yend = y),
+               inherit.aes = FALSE,
+               size = 0.8) +
+  geom_segment(data = pval_annot,
+               aes(x = x_start, xend = x_start, y = y, yend = y - 100),
+               inherit.aes = FALSE,
+               size = 0.8) +
+  geom_segment(data = pval_annot,
+               aes(x = x_end, xend = x_end, y = y, yend = y - 100),
+               inherit.aes = FALSE,
+               size = 0.8) +
+  geom_text(data = pval_annot,
+            aes(x = (x_start + x_end) / 2, y = 8505, label = label),
+            inherit.aes = FALSE,
+            size = 6) + 
+  theme_classic(base_size = 14) +
+  theme(
+    axis.ticks.length = unit(0.25, "cm"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "none"
+  )
+
