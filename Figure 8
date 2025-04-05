@@ -1,0 +1,71 @@
+# Plotting the relative frequency of each HLA Class I allele in our discovery cohort
+
+# Load necessary libraries
+library(readxl)
+library(tidyverse)
+
+Discovery <- read_excel("NIHMS817344-supplement-Table_S2.xlsx", sheet = "exome analysis (n=110)") # Read the discovery cohort file
+
+# Extract HLA allele columns and count frequency
+hla_cols <- df %>% select(`hla.a1`, `hla.a2`, `hla.b1`, `hla.b2`, `hla.c1`, `hla.c2`)
+alleles <- unlist(hla_cols)
+
+# Create a data frame with relative frequencies
+allele_freq <- as.data.frame(table(alleles)) %>%
+  mutate(Percent = Freq / sum(Freq) * 100) %>%
+  arrange(desc(Percent))
+
+# Plot relative HLA frequencies
+ggplot(allele_freq, aes(x = reorder(alleles, -Percent), y = Percent)) +
+  geom_bar(stat = "identity", fill = "#56B4E9", width = 0.8) +
+  scale_y_continuous(expand = c(0, 0), labels = scales::percent_format(scale = 1)) +
+  labs(
+    title = "Relative Frequency of HLA Alleles in the Discovery Cohort",
+    x = "HLA Alleles",
+    y = "Relative frequencies (%)"
+  ) +
+  theme(
+    panel.background = element_blank(),
+    panel.grid.major.y = element_line(color = "grey90"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 10),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.line = element_line(color = "black")
+  )
+
+#We repeat the same process to plot the relative HLA Class I alleles for the validation cohort
+
+validation <- read_excel("NIHMS980063-supplement-Supplemental_Table_S1.xlsx", sheet = "Cohort 1")
+
+# Split the comma-separated HLA Class I alleles
+alleles <- df$`HLA Class I Alleles` %>%
+  str_split(",", simplify = FALSE) %>%
+  unlist()
+
+# Create frequency table with percentages
+allele_freq <- as.data.frame(table(alleles)) %>%
+  mutate(Percent = Freq / sum(Freq) * 100) %>%
+  arrange(desc(Percent))
+
+# Plot
+ggplot(allele_freq, aes(x = reorder(alleles, -Percent), y = Percent)) +
+  geom_bar(stat = "identity", fill = "#56B4E9", width = 0.8) +
+  scale_y_continuous(expand = c(0, 0), labels = scales::percent_format(scale = 1)) +
+  labs(
+    title = "Relative Frequency of HLA Class I Alleles in the Validation Cohort",
+    x = "HLA Class I Alleles",
+    y = "Relative Frequency (%)"
+  ) +
+  theme(
+    panel.background = element_blank(),
+    panel.grid.major.y = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 10),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.line = element_line(color = "black")
+  )
+
