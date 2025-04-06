@@ -1,0 +1,809 @@
+# Upload libraries
+library(readr)   
+library(dplyr)   
+library(openxlsx) 
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+
+
+hla_patients <- read_excel("discovery_data.xlsx")
+nrow(hla_patients)
+for (i in 1:nrow(hla_patients)) {
+  patient_id <- hla_patients$patient[i]
+  hla_alleles <- c(hla_patients$`hla.a1`[i], hla_patients$`hla.a2`[i], hla_patients$`hla.b1`[i], hla_patients$`hla.b2`[i], hla_patients$`hla.c1`[i], hla_patients$`hla.c2`[i])
+  
+  # Define file name
+  file_name <- paste0(patient_id, ".txt")
+  
+  # Write to file
+  writeLines(hla_alleles, file_name)
+}
+
+##make a list with all the patient numbers
+
+# Define output file
+patient_list <- "patient_list_rev.txt"
+
+# Extract unique patient IDs 
+unique_patients <- unique(hla_patients$patient)
+
+# Write all patient IDs to a file
+writeLines(unique_patients, con = patient_list)
+
+
+#extract the neoantigens per patient
+neoantigens_patients<- read.csv("/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/tables4_revised.csv", stringsAsFactors = FALSE)
+head(neoantigens_patients)
+
+
+
+# Keep only valid patient IDs that match "Pat" followed by digits
+neoantigens_patients <- neoantigens_patients %>%
+  filter(grepl("^Pat\\d+$", patient))
+
+
+
+unique_patients <- unique(neoantigens_patients$patient)
+
+
+for (patient_id in unique_patients) {
+  # Extract peptide_mut values for the patient
+  peptides <- neoantigens_patients$peptide_mut[neoantigens_patients$patient == patient_id]
+  
+  # Define file name
+  file_name <- paste0(patient_id, "_peptides.txt")
+  
+  # Write to file
+  writeLines(peptides, file_name)
+}
+
+print(paste0(patient_id, "_peptides", ".txt"))
+
+
+for (patient_id in unique_patients) {
+  # Extract peptide_mut values for the patient
+  peptides <- neoantigens_patients$peptide_mut[neoantigens_patients$patient == patient_id]
+  
+  # Define file name
+  file_name <- paste0(patient_id, "_peptides.txt")
+  
+  if (length(peptides) == 0) {
+    writeLines("No peptide mutations found", file_name)
+  } else {
+    writeLines(peptides, file_name)
+  }
+}
+
+#once we have all the netmhcpan files in our folder, we need to extract the relevant information: binding affinity and binding affinity ranking 
+
+Pat02 <- read.table("/Users/User1/Desktop/MBLS_3_year/Thesis/NetpanMHC/Test_BA_predictions/Pat02_predictions", 
+                    header = FALSE, 
+                    sep = "",        # Auto-detect spaces
+                    fill = TRUE,  
+                    skip = 6 ,# Ensures missing values don’t break
+                    strip.white = TRUE,  # Removes extra spaces
+                    stringsAsFactors = FALSE)
+
+head(Pat02)
+# Select %Rank_BA and Aff(nM) columns
+selected_data <- Pat02 %>%
+  select(`V2`, `V3`, `V15`, `V16`)
+
+head(selected_data)
+
+output_file <- "HLA_predictions.xlsx"
+
+# Write to Excel
+write.xlsx(selected_data, output_file, rowNames = FALSE)
+
+print("Excel file saved successfully!")
+getwd()
+
+#make an excel file wiht all the neoantigens of ptient 02 and their respectives BA per HLA allele
+
+predictions <- read_excel("/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/HLA_predictions.xlsx", skip=4)
+
+colnames(predictions) <- c("HLA", "Neoantigen", "Rank_BA", "Affinity_nM")
+
+formatted_data <- list()
+
+# Process each neoantigen separately
+unique_neoantigens <- unique(predictions$Neoantigen)
+
+print(unique_neoantigens)
+
+head(predictions)
+
+predictions <- predictions %>% filter(!is.na(HLA), !is.na(Neoantigen))
+
+for (neo in unique_neoantigens) {
+  
+  # Subset data for the current neoantigen
+  subset_data <- predictions[predictions$Neoantigen == neo, ]
+  
+  # Create a placeholder row for this neoantigen
+  row_result <- list(Neoantigen = neo)
+  
+  # Initialize column index
+  col_index <- 1
+  prev_hla <- NULL
+  
+  # Iterate over each row in subset_data
+  for (i in 1:nrow(subset_data)) {
+    hla <- subset_data$HLA[i]
+    rank_ba <- subset_data$Rank_BA[i]
+    affinity_nm <- subset_data$Affinity_nM[i]
+    
+    # If the HLA is different from the previous one, move to the next column
+    if (!is.null(prev_hla) && !is.na(prev_hla) && !is.na(hla) && prev_hla != hla) {
+      col_index <- col_index + 1
+    }
+    
+    # Store values in the correct columns dynamically
+    row_result[[paste0("HLA_", col_index)]] <- hla
+    row_result[[paste0("Rank_BA_", col_index)]] <- rank_ba
+    row_result[[paste0("Affinity_nM_", col_index)]] <- affinity_nm
+    
+    # Update previous HLA
+    prev_hla <- hla
+  }
+  
+  # Append row_result to formatted_data
+  formatted_data <- append(formatted_data, list(row_result))
+}
+
+# Convert list to a data frame
+formatted_df <- bind_rows(formatted_data)
+
+formatted_df <- formatted_df %>%
+  mutate(Patient_ID = "Pat02") %>%  # Add patient ID column
+  select(Patient_ID, everything())  # Move it to the first column
+
+
+# Save to Excel
+output_file <- "HLA_predictions_pat02.xlsx"
+write.xlsx(formatted_df, output_file, rowNames = FALSE)
+
+print("Excel file saved successfully with each new HLA appearing in new columns!")
+
+
+
+# Define the directory containing all patient prediction files
+data_dir <- "/Users/User1/Desktop/MBLS_3_year/Thesis/NetpanMHC/BA_predictions_rev"
+
+
+
+
+## 2 for loops
+
+# **Step 1: First loop - Read and clean all patient files**
+all_patients_raw <- list()  # Store raw cleaned data
+
+for (file_path in file_list) {
+  
+  # Extract patient ID (e.g., "Pat02" from "Pat02_predictions")
+  patient_id <- gsub("_predictions", "", basename(file_path))
+  
+  # Read patient text file (assuming tab/space-separated)
+  hla_data <- read.table(file_path, 
+                         header = FALSE, 
+                         sep = "",        # Auto-detect spaces
+                         fill = TRUE,  
+                         skip = 6,        # Skips first 6 lines (header)
+                         strip.white = TRUE,  
+                         stringsAsFactors = FALSE)
+  
+  # Extract relevant columns (adjust indexes if needed)
+  selected_data <- hla_data %>%
+    select(V2, V3, V15, V16) %>%
+    rename(HLA = V2, Neoantigen = V3, Rank_BA = V15, Affinity_nM = V16)
+  selected_data <- selected_data %>% filter(!is.na(HLA), HLA != "", HLA != ":")
+  
+  
+  # Remove non-numeric values and ensure conversion
+  selected_data <- selected_data %>%
+    filter(!grepl("[^0-9.]", Rank_BA), !grepl("[^0-9.]", Affinity_nM)) %>%
+    mutate(
+      Rank_BA = as.numeric(Rank_BA),
+      Affinity_nM = as.numeric(Affinity_nM)
+    )
+  
+  # Store cleaned patient data
+  all_patients_raw[[patient_id]] <- selected_data
+}
+
+print(selected_data)
+
+
+
+# **Step 2: Second loop - Process and store data into Excel**
+all_patients_data <- list()  # Store formatted output for writing
+
+for (patient_id in names(all_patients_raw)) {
+  
+  # Retrieve cleaned data for this patient
+  selected_data <- all_patients_raw[[patient_id]]
+  
+  # Initialize list for formatted rows
+  formatted_data <- list()
+  
+  # Process each Neoantigen
+  unique_neoantigens <- unique(selected_data$Neoantigen)
+  
+  for (neo in unique_neoantigens) {
+    
+    # Subset data for this neoantigen
+    subset_data <- selected_data[selected_data$Neoantigen == neo, ]
+    
+    # Create a row for this Neoantigen
+    row_result <- list(Patient_ID = patient_id, Neoantigen = neo)
+    
+    # Initialize column index
+    col_index <- 1
+    prev_hla <- NULL
+    
+    # Store HLA values dynamically
+    for (i in 1:nrow(subset_data)) {
+      hla <- subset_data$HLA[i]
+      rank_ba <- subset_data$Rank_BA[i]
+      affinity_nm <- subset_data$Affinity_nM[i]
+      
+      # Move to next column if HLA changes
+      if (!is.null(prev_hla) && !is.na(prev_hla) && !is.na(hla) && prev_hla != hla) {
+        col_index <- col_index + 1
+      }
+      
+      # Store values dynamically
+      row_result[[paste0("HLA_", col_index)]] <- as.character(hla)
+      row_result[[paste0("Rank_BA_", col_index)]] <- as.numeric(rank_ba)
+      row_result[[paste0("Affinity_nM_", col_index)]] <- as.numeric(affinity_nm)
+      
+      # Update previous HLA
+      prev_hla <- hla
+    }
+    
+    # Append formatted row
+    formatted_data <- append(formatted_data, list(row_result))
+  }
+  
+  # Convert to DataFrame and store
+  patient_df <- bind_rows(formatted_data)
+  all_patients_data <- append(all_patients_data, list(patient_df))
+}
+
+
+# Combine all patient data into one large DataFrame
+final_df <- bind_rows(all_patients_data)
+
+
+# Save to a single Excel file
+output_file <- "All_HLA_Predictions_rev.xlsx"
+write.xlsx(final_df, output_file, rowNames = FALSE)
+
+
+#now we want to get the lowest binding affinity score and ranking 
+
+
+
+
+# Compute lowest rank and affinity along with the associated HLA allele
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    # Find the column index of the lowest Rank_BA
+    Lowest_Rank_BA = min(c_across(starts_with("Rank_BA")), na.rm = TRUE),
+    Lowest_Rank_HLA = {
+      rank_cols <- c_across(starts_with("Rank_BA"))  # Select all Rank_BA columns
+      hla_cols <- c_across(starts_with("HLA"))  # Select all HLA columns
+      if (all(is.na(rank_cols))) NA else hla_cols[which.min(rank_cols)]  # Handle empty cases
+    },
+    
+    # Find the column index of the lowest Affinity_nM
+    Lowest_Affinity_NM = min(c_across(starts_with("Affinity_nM")), na.rm = TRUE),
+    Lowest_Affinity_HLA = {
+      affinity_cols <- c_across(starts_with("Affinity_nM"))  # Select all Affinity columns
+      hla_cols <- c_across(starts_with("HLA"))  # Select all HLA columns
+      if (all(is.na(affinity_cols))) NA else hla_cols[which.min(affinity_cols)]  # Handle empty cases
+    }
+  ) %>%
+  ungroup()
+
+
+
+
+# Check if the same allele has the lowest Rank_BA and Affinity_nM
+final_df <- final_df %>%
+  mutate(
+    Same_HLA_Lowest = Lowest_Rank_HLA == Lowest_Affinity_HLA  # TRUE if they match, FALSE otherwise
+  )
+
+# Remove the duplicate column
+final_df <- final_df %>%
+  select(-Lowest_Affinity_NM)  # Drops the earlier duplicate column
+
+
+
+##merging both tables
+
+
+our_table_merged <- our_table %>%
+  left_join(
+    neoantigens_patients %>%
+      select(peptide_mut, hla, affinity_mut),
+    by = c("Neoantigen" = "peptide_mut")
+  ) %>%
+  rename(
+    `HLA_van_Allen` = hla,
+    `affinity_van_Allen` = affinity_mut
+  )
+
+
+output_file <- "Combined_tables_rev.xlsx"
+write.xlsx(our_table_merged, output_file, rowNames = FALSE)
+
+
+
+##want to make both HLA notations to be the same so we can compare if the van allen predictions were the same
+
+df <- read_excel("Combined_tables_rev.xlsx")
+
+head(df)
+# Function to standardize HLA notation
+convert_hla_format <- function(hla_column) {
+  return(gsub("^(HLA-[A-Z])([0-9]+:)", "\\1*\\2", hla_column))
+}
+
+# Identify columns containing "HLA"
+hla_columns <- grep("HLA_van_Allen", names(df), value = TRUE)
+
+print(hla_columns)
+
+# Apply the function to all HLA columns
+df[hla_columns] <- lapply(df[hla_columns], convert_hla_format)
+
+
+
+
+output_file <- "Standardized_HLA_Table.xlsx"
+write.xlsx(df, output_file, rowNames = FALSE)
+
+# View first few rows to verify changes
+head(df$HLA_van_Allen)
+
+compared_predictions <- df %>%
+  mutate(
+    Same_best_HLA = HLA_van_Allen == Lowest_Affinity_HLA  # TRUE if they match, FALSE otherwise
+  )
+
+
+output_file <- "Final_BA_predictions_rev.xlsx"
+write.xlsx(compared_predictions, output_file, rowNames = FALSE)
+
+##cleaning the van allen table to be able to compare results 
+
+
+df<- read.csv("tables4_revised.csv", stringsAsFactors = FALSE)
+head(df)
+df_cleaned <- df[!duplicated(df$peptide_mut), ]
+nrow(df) # 107615
+nrow(df_cleaned) #75747 (numbers don't match...)
+
+
+df_cl
+
+# Load necessary library
+library(stringr)
+
+# Ensure HLA column is treated as character data and remove whitespace
+df_cleaned <- df_cleaned %>%
+  mutate(hla = trimws(as.character(hla))) %>%  # Remove extra spaces
+  filter(str_detect(hla, "^HLA-"))  # Keep only rows where HLA starts with "HLA-"
+
+nrow(df_cleaned) #75685
+
+print(df_cleaned)
+
+output_file <- "Cleaned_Van_Allen_Ba_predictions_rev.xlsx"
+write.xlsx(df_cleaned, output_file, rowNames = FALSE)
+
+
+##we get very different nrows  so lets try to figure out what is the cause of this:
+
+van_allen_table <- read_excel("Cleaned_Van_Allen_Ba_predictions.xlsx")
+our_table<- final_df
+
+
+# Ensure both tables only contain relevant columns and remove duplicates
+our_neoantigens <- our_table %>%
+  distinct(Neoantigen) %>%
+  pull(Neoantigen)
+
+van_allen_neoantigens <- van_allen_table %>%
+  distinct(peptide_mut) %>%
+  pull(peptide_mut)
+
+# Check which neoantigens are missing in Van Allen's table
+missing_neoantigens <- setdiff(our_neoantigens, van_allen_neoantigens)
+
+# Print missing neoantigens
+if (length(missing_neoantigens) == 0) {
+  print("All neoantigens in your table are present in Van Allen’s table.")
+} else {
+  print("The following neoantigens from your table are NOT in Van Allen’s table:")
+  print(missing_neoantigens)
+}
+
+
+
+
+# Extract unique neoantigens from both tables
+our_neoantigens <- our_table %>%
+  distinct(Patient_ID, Neoantigen)  # Keep patient info
+
+van_allen_neoantigens <- van_allen_table %>%
+  distinct(peptide_mut) %>%
+  pull(peptide_mut)
+
+# Find missing neoantigens
+missing_neoantigens <- setdiff(our_neoantigens$Neoantigen, van_allen_neoantigens)
+
+# Filter our_table to get patient IDs for missing neoantigens
+missing_data <- our_neoantigens %>%
+  filter(Neoantigen %in% missing_neoantigens)
+
+# Print missing neoantigens with their patients
+if (nrow(missing_data) == 0) {
+  print("✅ All neoantigens in your table are present in Van Allen’s table.")
+} else {
+  print("⚠️ The following neoantigens from your table are NOT in Van Allen’s table:")
+  print(missing_data)
+}
+
+output_file <- "Missing_Neoantigens.xlsx"
+write.xlsx(missing_data, output_file, rowNames = FALSE)
+
+
+
+
+##trying to check if is our cleaning step that caused some problems or why do we have unmatching neoantigens, if we took the neoantigens from that file --> it is:)
+
+van_allen_table_uncleaned <- read_excel("tables4.neoantigen_list.xlsx")
+our_table<- read_excel("Final_BA_predictions.xlsx")
+
+
+# Ensure both tables only contain relevant columns and remove duplicates
+our_neoantigens <- our_table %>%
+  distinct(Neoantigen) %>%
+  pull(Neoantigen)
+
+van_allen_neoantigens <- van_allen_table_uncleaned %>%
+  distinct(peptide_mut) %>%
+  pull(peptide_mut)
+
+# Check which neoantigens are missing in Van Allen's table
+missing_neoantigens <- setdiff(our_neoantigens, van_allen_neoantigens)
+
+# Print missing neoantigens
+if (length(missing_neoantigens) == 0) {
+  print("All neoantigens in your table are present in Van Allen’s table.")
+} else {
+  print("The following neoantigens from your table are NOT in Van Allen’s table:")
+  print(missing_neoantigens)
+}
+
+##merging both tables
+
+
+our_table_merged <- our_table %>%
+  left_join(
+    neoantigens_patients %>%
+      select(peptide_mut, hla, affinity_mut),
+    by = c("Neoantigen" = "peptide_mut")
+  ) %>%
+  rename(
+    `HLA_van_Allen` = hla,
+    `affinity_van_Allen` = affinity_mut
+  )
+
+our
+output_file <- "Combined_tables_rev.xlsx"
+write.xlsx(our_table_merged, output_file, rowNames = FALSE)
+
+
+
+##want to make both HLA notations to be the same so we can compare if the van allen predictions were the same
+
+df <- read_excel("Combined_tables_rev.xlsx")
+
+head(df)
+# Function to standardize HLA notation
+convert_hla_format <- function(hla_column) {
+  return(gsub("^(HLA-[A-Z])([0-9]+:)", "\\1*\\2", hla_column))
+}
+
+# Identify columns containing "HLA"
+hla_columns <- grep("HLA_van_Allen", names(df), value = TRUE)
+
+print(hla_columns)
+
+# Apply the function to all HLA columns
+df[hla_columns] <- lapply(df[hla_columns], convert_hla_format)
+
+
+
+
+output_file <- "Standardized_HLA_Table.xlsx"
+write.xlsx(df, output_file, rowNames = FALSE)
+
+# View first few rows to verify changes
+head(df$HLA_van_Allen)
+
+compared_predictions <- df %>%
+  mutate(
+    Same_best_HLA = HLA_van_Allen == Lowest_Affinity_HLA  # TRUE if they match, FALSE otherwise
+  )
+
+
+output_file <- "Final_BA_predictions_rev.xlsx"
+write.xlsx(compared_predictions, output_file, rowNames = FALSE)
+
+##compare both predictions
+false_count <- sum(compared_predictions$Same_best_HLA == FALSE, na.rm = TRUE)
+print(false_count)#15339
+
+nrow(compared_predictions)#76550
+
+
+# Convert columns to numeric
+compared_predictions$Lowest_Affinity_nM <- as.numeric(as.character(compared_predictions$Lowest_Affinity_nM))
+compared_predictions$affinity_van_Allen <- as.numeric(as.character(compared_predictions$affinity_van_Allen))
+
+# Remove NA values explicitly
+clean_data <- na.omit(compared_predictions[, c("Lowest_Affinity_nM", "affinity_van_Allen")]) 
+
+# Run Wilcoxon test
+wilcox.test(clean_data$Lowest_Affinity_nM, clean_data$affinity_van_Allen)#significant difference between the predictionsss!!! p-value < 2.2e-16
+
+
+##compare the BA predictions given by van_allen and ours
+
+# Filter to only rows where "same best hla allele" is TRUE
+filtered_data <- compared_predictions[compared_predictions$Same_best_HLA == TRUE, ]
+
+
+# Convert columns to numeric
+filtered_data$Lowest_Affinity_nM <- as.numeric(as.character(filtered_data$Lowest_Affinity_nM))
+filtered_data$affinity_van_Allen <- as.numeric(as.character(filtered_data$affinity_van_Allen))
+
+# Remove NA values
+clean_data <- na.omit(filtered_data[, c("Lowest_Affinity_nM", "affinity_van_Allen")])
+
+# Run Wilcoxon test
+wilcox.test(clean_data$Lowest_Affinity_nM, clean_data$affinity_van_Allen, paired=TRUE) #p-value < 2.2e-16
+
+median(clean_data$affinity_van_Allen)
+median(clean_data$Lowest_Affinity_nM)
+
+BA_plot <- data.frame(
+  affinity = c(clean_data$affinity_van_Allen, clean_data$Lowest_Affinity_nM),
+  source = c(
+    rep("Van Allen et. al. predictions", length(clean_data$affinity_van_Allen)),
+    rep("Updated predictions", length(clean_data$Lowest_Affinity_nM))
+  )
+)
+
+ggplot(BA_plot, aes(x = source, y = affinity, fill = source)) +
+  #geom_violin(trim = FALSE, alpha = 0.4, color = NA) +
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 1) +
+  coord_cartesian(ylim = c(0, 3000)) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.4, color = "black", size = 0.5) +
+  theme_classic(base_size = 14) +
+  labs(
+    x = NULL,
+    y = "Binding Affinity (nM)",
+    title = "NetMHCpan Predicted Binding Affinities"
+  ) +
+  scale_fill_manual(values = c("Van Allen et. al. predictions" = "#fc8d62", "Updated predictions" = "#fc8d62")) +
+  theme(legend.position = "none")+
+  geom_text(
+    data = pvals,
+    aes(x = 1.5, y = 3000, label = label),
+    inherit.aes = FALSE,
+    size = 5
+  ) +
+  geom_segment(
+    data = pvals,
+    aes(x = x_start, xend = x_end, y = 2995, yend = 2995),
+    inherit.aes = FALSE,
+    size = 0.4
+  ) +
+  geom_segment(
+    data = pvals,
+    aes(x = x_start, xend = x_start, y = 2995, yend = 2962),
+    inherit.aes = FALSE,
+    size = 0.4
+  ) +
+  geom_segment(
+    data = pvals,
+    aes(x = x_end, xend = x_end, y = 2995, yend = 2962),
+    inherit.aes = FALSE,
+    size = 0.4
+  ) + theme_classic(base_size = 14) +
+  theme(
+    #strip.background = element_blank(),
+    #strip.text = element_text(size = 12),
+    axis.ticks.length = unit(0.25, "cm"),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+
+######################################################
+
+# Load necessary libraries
+library(readr)
+library(dplyr)
+library(openxlsx)
+library(tidyverse)
+library(readxl)
+
+# ---------------------------
+# Step 1: Process HLA Alleles
+# ---------------------------
+
+hla_patients <- read_excel("discovery_data.xlsx")
+
+# Write HLA alleles for each patient to a separate file
+for (i in 1:nrow(hla_patients)) {
+  patient_id <- hla_patients$patient[i]
+  hla_alleles <- c(
+    hla_patients$`hla.a1`[i], hla_patients$`hla.a2`[i],
+    hla_patients$`hla.b1`[i], hla_patients$`hla.b2`[i],
+    hla_patients$`hla.c1`[i], hla_patients$`hla.c2`[i]
+  )
+  writeLines(hla_alleles, paste0(patient_id, ".txt"))
+}
+
+# Save unique patient list
+unique_patients <- unique(hla_patients$patient)
+writeLines(unique_patients, "patient_list_rev.txt")
+
+# ----------------------------------
+# Step 2: Process Neoantigen Dataset
+# ----------------------------------
+
+neoantigens_patients <- read.csv(
+  "/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/tables4_revised.csv",
+  stringsAsFactors = FALSE
+)
+
+# Keep only valid patient IDs (e.g., "Pat01")
+neoantigens_patients <- neoantigens_patients %>%
+  filter(grepl("^Pat\\d+$", patient))
+
+# Write peptide_mut sequences to individual patient files
+for (patient_id in unique(neoantigens_patients$patient)) {
+  peptides <- neoantigens_patients$peptide_mut[neoantigens_patients$patient == patient_id]
+  file_name <- paste0(patient_id, "_peptides.txt")
+  if (length(peptides) == 0) {
+    writeLines("No peptide mutations found", file_name)
+  } else {
+    writeLines(peptides, file_name)
+  }
+}
+
+# -------------------------------
+# Step 3: Process One Patient File
+# no need-------------------------------
+
+# ----------------------------------------
+# Step 4: Batch Process All Patient Files
+# ----------------------------------------
+
+data_dir <- "/Users/User1/Desktop/MBLS_3_year/Thesis/NetpanMHC/BA_predictions_rev"
+file_list <- list.files(path = data_dir, full.names = TRUE)
+
+all_patients_raw <- list()
+
+for (file_path in file_list) {
+  patient_id <- gsub("_predictions", "", basename(file_path))
+  
+  hla_data <- read.table(file_path,
+                         header = FALSE, sep = "", fill = TRUE, skip = 6,
+                         strip.white = TRUE, stringsAsFactors = FALSE)
+  
+  selected_data <- hla_data %>%
+    select(V2, V3, V15, V16) %>%
+    rename(HLA = V2, Neoantigen = V3, Rank_BA = V15, Affinity_nM = V16) %>%
+    filter(!is.na(HLA), HLA != "", HLA != ":") %>%
+    filter(!grepl("^HLA", Neoantigen)) %>%  # <- Remove non-neoantigen entries
+    filter(!grepl("[^0-9.]", Rank_BA), !grepl("[^0-9.]", Affinity_nM)) %>%
+    mutate(
+      Rank_BA = as.numeric(Rank_BA),
+      Affinity_nM = as.numeric(Affinity_nM)
+    )
+  
+  all_patients_raw[[patient_id]] <- selected_data
+}
+
+# Format and combine all patient data
+all_patients_data <- list()
+
+for (patient_id in names(all_patients_raw)) {
+  selected_data <- all_patients_raw[[patient_id]]
+  formatted_data <- list()
+  
+  for (neo in unique(selected_data$Neoantigen)) {
+    subset_data <- selected_data[selected_data$Neoantigen == neo, ]
+    row_result <- list(Patient_ID = patient_id, Neoantigen = neo)
+    
+    col_index <- 1
+    prev_hla <- NULL
+    
+    for (i in 1:nrow(subset_data)) {
+      hla <- subset_data$HLA[i]
+      rank_ba <- subset_data$Rank_BA[i]
+      affinity_nm <- subset_data$Affinity_nM[i]
+      
+      if (!is.null(prev_hla) && !is.na(prev_hla) && !is.na(hla) && prev_hla != hla) {
+        col_index <- col_index + 1
+      }
+      
+      row_result[[paste0("HLA_", col_index)]] <- hla
+      row_result[[paste0("Rank_BA_", col_index)]] <- rank_ba
+      row_result[[paste0("Affinity_nM_", col_index)]] <- affinity_nm
+      prev_hla <- hla
+    }
+    
+    formatted_data <- append(formatted_data, list(row_result))
+  }
+  
+  patient_df <- bind_rows(formatted_data)
+  all_patients_data <- append(all_patients_data, list(patient_df))
+}
+
+final_df <- bind_rows(all_patients_data)
+
+# ---------------------------------------------
+# Step 5: Compute Best Binding Metrics per Row
+# ---------------------------------------------
+
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    Lowest_Rank_BA = min(c_across(starts_with("Rank_BA")), na.rm = TRUE),
+    Lowest_Rank_HLA = {
+      ranks <- c_across(starts_with("Rank_BA"))
+      hlas <- c_across(starts_with("HLA"))
+      if (all(is.na(ranks))) NA else hlas[which.min(ranks)]
+    },
+    Lowest_Affinity_NM = min(c_across(starts_with("Affinity_nM")), na.rm = TRUE),
+    Lowest_Affinity_HLA = {
+      affs <- c_across(starts_with("Affinity_nM"))
+      hlas <- c_across(starts_with("HLA"))
+      if (all(is.na(affs))) NA else hlas[which.min(affs)]
+    }
+  ) %>%
+  ungroup() %>%
+  mutate(Same_HLA_Lowest = Lowest_Rank_HLA == Lowest_Affinity_HLA)
+
+
+# -----------------------------------
+# Step 6: Merge with Van Allen Table
+# -----------------------------------
+
+our_table_merged <- final_df %>%
+  left_join(
+    neoantigens_patients %>%
+      select(peptide_mut, hla, affinity_mut),
+    by = c("Neoantigen" = "peptide_mut")
+  ) %>%
+  rename(
+    `HLA_van_Allen` = hla,
+    `affinity_van_Allen` = affinity_mut
+  )
+
+write.xlsx(our_table_merged, "Combined_tables_rev.xlsx", rowNames = FALSE)
