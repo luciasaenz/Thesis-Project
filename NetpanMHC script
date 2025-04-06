@@ -1,0 +1,51 @@
+# Getting the binding affinity predictions for all neoantigen-HLA allele pair, for every patient, with the NetpanMHC software
+
+## Extract the HLA alleles for each patient from the discovery data (in R)
+
+hla_patients <- read_excel("discovery_data.xlsx")
+# Write HLA alleles for each patient to a separate file 
+for (i in 1:nrow(hla_patients)) {
+  patient_id <- hla_patients$patient[i]
+  hla_alleles <- c(
+    hla_patients$`hla.a1`[i], hla_patients$`hla.a2`[i],
+    hla_patients$`hla.b1`[i], hla_patients$`hla.b2`[i],
+    hla_patients$`hla.c1`[i], hla_patients$`hla.c2`[i]
+  )
+  writeLines(hla_alleles, paste0(patient_id, ".txt"))
+}
+
+
+## Extract the neoantigens for each patient from the discovery data (in R)
+
+neoantigens_patients <- read.csv("/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/tables4_revised.csv", stringsAsFactors = FALSE)
+
+# Keep only valid patient IDs (e.g., "Pat01")
+neoantigens_patients <- neoantigens_patients %>%
+  filter(grepl("^Pat\\d+$", patient))
+
+# Write peptide_mut sequences to individual patient files
+for (patient_id in unique(neoantigens_patients$patient)) {
+  peptides <- neoantigens_patients$peptide_mut[neoantigens_patients$patient == patient_id]
+  file_name <- paste0(patient_id, "_peptides.txt")
+  if (length(peptides) == 0) {
+    writeLines("No peptide mutations found", file_name)
+  } else {
+    writeLines(peptides, file_name)
+  }
+}
+
+## Make a list of all the patients to be able to loop over in the NetpanMHC script (in R)
+
+unique_patients <- unique(hla_patients$patient)
+writeLines(unique_patients, "patient_list_rev.txt")
+
+
+## Script to get the binding predictions for each neoantigen- HLA allele pair,for each patient with NetpanMHC
+
+User1@MacBook-Air-153 Desktop % foreach p ( $(cat MBLS_3_year/Thesis/1st_paper/patient_list_rev.txt) )
+    foreach i ( $(cat MBLS_3_year/Thesis/NetpanMHC/Alleles_rev/"$p".txt) )
+        foreach j ( $(ls MBLS_3_year/Thesis/NetpanMHC/Neoantigens_rev/"$p"_peptides.txt) )
+            arch -x86_64 /Users/User1/netMHCpan-4.1/netMHCpan -a $i -f $j -p -BA >> MBLS_3_year/Thesis/NetpanMHC/BA_predictions_rev/"$p"_predictions
+        end
+    end
+end
