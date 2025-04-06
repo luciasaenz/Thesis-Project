@@ -1,190 +1,161 @@
-library("readxl")
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-library("ggsignif")  
-library(ggpubr)
+# Find if any HLA Class I allele is associated with longer or shorter survival times
 
-my_data <- read_excel("NIHMS817344-supplement-Table_S2.xlsx", sheet = 1) #Discovery Cohort
+library(tidyverse)
+library(readxl)
 
-hla_long <- my_data %>%
-  select(hla.b1, hla.b2, overall_survival) %>% #do the same for the three locus (HLA-A, HLA-B, HLA-C)
-  mutate(overall_survival = overall_survival / 30.437) %>%  # Convert days to months
-  pivot_longer(cols = c(hla.b1, hla.b2), names_to = "locus", values_to = "allele")
-
-observed_median_survival <- hla_long %>%
-  group_by(allele) %>%
-  summarise(median_survival_time = median(overall_survival, na.rm = TRUE)) %>%
-  arrange(desc(median_survival_time))
-
-set.seed(42)
-num_permutations <- 10000
-permuted_median_survivals <- list()  # Store permuted results
-
-# Permutation loop
-for (i in 1:num_permutations) {
-  permuted_times <- sample(hla_long$overall_survival) # Shuffle survival times
-  permuted_medians <- hla_long %>%
-    mutate(overall_survival = permuted_times) %>%
-    group_by(allele) %>%
-    summarise(median_survival_time = median(overall_survival, na.rm = TRUE)) # Compute median survival per allele after permutation
-  permuted_median_survivals[[i]] <- permuted_medians
+# Plot Function
+plot_permutation_density <- function(observed_value, permuted_values, allele_name, p_value, direction = "greater", label = "HLA") {
+  permuted_values <- na.omit(permuted_values)
+  
+  hist(permuted_values,
+       col = rgb(0, 1, 0, 0.3),
+       border = "black",
+       prob = TRUE,
+       xlab = paste("Median Survival Time (Permuted) of", paste(label, allele_name)),
+       main = paste("Permutation Test for", paste(label, allele_name)))
+  
+  dens <- density(permuted_values, adjust = 2.5)
+  lines(dens, col = "darkgreen", lwd = 4)
+  
+  if (direction == "greater") {
+    polygon(c(dens$x[dens$x >= observed_value], observed_value),
+            c(dens$y[dens$x >= observed_value], 0),
+            col = rgb(1, 0, 0, 0.3), border = NA)
+  } else {
+    polygon(c(dens$x[dens$x <= observed_value], observed_value),
+            c(dens$y[dens$x <= observed_value], 0),
+            col = rgb(1, 0, 0, 0.3), border = NA)
+  }
+  
+  abline(v = observed_value, col = "red", lwd = 3)
+  
+  text(x = observed_value * 1.1,
+       y = max(dens$y) * 1.1,
+       labels = paste("Observed survival time:\n", round(observed_value, 2),
+                      "\nEmpirical p-value:\n", round(p_value, 4)),
+       col = "red", cex = 0.8, adj = c(0, 0))
 }
 
-# Convert list to a dataframe
-permuted_median_survivals_df <- bind_rows(permuted_median_survivals, .id = "permutation")
+# Permutation Median Function
+get_permuted_medians <- function(data, time_col, allele_col, num_permutations = 10000) {
+  times <- data[[time_col]]
+  permuted_list <- vector("list", num_permutations)
+  
+  for (i in seq_len(num_permutations)) {
+    data[[time_col]] <- sample(times)
+    permuted_list[[i]] <- data %>%
+      group_by(!!sym(allele_col)) %>%
+      summarise(median_survival_time = median(.data[[time_col]], na.rm = TRUE), .groups = "drop")
+  }
+  
+  bind_rows(permuted_list, .id = "permutation") %>%
+    rename(allele = !!sym(allele_col))
+}
 
-# Compute empirical p-values
-empirical_p_values <- observed_median_survival %>%
-  rowwise() %>%
-  mutate(
-    p_value = mean(permuted_median_survivals_df$median_survival_time >= median_survival_time)
-  )
+# Empirical P-value Calculator
+calculate_empirical_p_values_auto <- function(observed_df, permuted_df) {
+  cohort_median <- median(observed_df$median_survival_time, na.rm = TRUE)
+  
+  observed_df %>%
+    rowwise() %>%
+    mutate(
+      direction = ifelse(median_survival_time >= cohort_median, "greater", "less"),
+      effect = ifelse(direction == "greater", "Protective", "Risk"),
+      p_value = if (direction == "greater") {
+        mean(permuted_df %>% filter(allele == allele) %>% pull(median_survival_time) >= median_survival_time)
+      } else {
+        mean(permuted_df %>% filter(allele == allele) %>% pull(median_survival_time) <= median_survival_time)
+      }
+    )
+}
 
-# View significant alleles (p ≤ 0.05) #change if needed
-significant_results <- empirical_p_values %>%
-  filter(p_value <= 0.05)
+# Analysis Function
 
-print(significant_results)
+run_hla_analysis <- function(data,
+                             time_col,                  # Name of the column with survival time
+                             hla_locus = NULL,          # "A", "B", or "C" (for discovery)
+                             allele_column = NULL,      # Used for validation data
+                             p_cutoff = 0.05,           # Significance threshold for p-values
+                             label = "HLA",             # Label for plots (e.g., "HLA-B")
+                             num_permutations = 10000,  # Number of permutations for null distribution
+                             convert_days_to_months = FALSE,  # Whether to convert survival time from days to months
+                             plot_allele = NULL) {      # Allele to plot
+  
+  if (!is.null(hla_locus)) {                            # Discovery survival times seem to be in days, transform them to month to be comparable with the validation cohort
+    if (convert_days_to_months) {
+      data[[time_col]] <- data[[time_col]] / 30.437
+    }
+    
+    locus_cols <- paste0("hla.", tolower(hla_locus), c("1", "2")) 
+    data_long <- data %>%
+      select(all_of(c(locus_cols, time_col))) %>%
+      pivot_longer(cols = all_of(locus_cols), names_to = "locus", values_to = "allele")
+    
+    allele_col <- "allele"
+    
+  } else if (!is.null(allele_column)) {
+    data_long <- data %>%
+      select(all_of(c(allele_column, time_col))) %>%
+      filter(!is.na(.data[[allele_column]]))
+    allele_col <- allele_column
+    
+  } else {
+    stop("Provide either `hla_locus` or `allele_column`.")
+  }
+  
+  observed <- data_long %>%
+    group_by(!!sym(allele_col)) %>%
+    summarise(median_survival_time = median(.data[[time_col]], na.rm = TRUE), .groups = "drop") %>%
+    rename(allele = !!sym(allele_col))
+  
+  permuted <- get_permuted_medians(data_long, time_col, allele_col, num_permutations) #Creates the null distribution by permuting survival times and calculating median survival for each allele
+  empirical <- calculate_empirical_p_values_auto(observed, permuted) # Compares observed vs permuted medians, for each allele
+  significant <- empirical %>% filter(p_value < p_cutoff) # Keeps only alleles with significant empirical p-values
+  
+  print(significant)
+  
+  # Plot logic
+  if (!is.null(plot_allele)) {
+    if (!(plot_allele %in% empirical$allele)) {
+      message("Allele not found: ", plot_allele)
+      return(NULL)
+    }
+    plot_data <- empirical %>% filter(allele == plot_allele)
+    obs_value <- observed %>% filter(allele == plot_data$allele) %>% pull(median_survival_time) # Gets the observed median survival time for the selected allel
+    perm_values <- permuted %>% filter(allele == plot_data$allele) %>% pull(median_survival_time) # Gets all the permuted survival medians for this allele
+  
+  plot_permutation_density(obs_value, perm_values, plot_data$allele, plot_data$p_value, direction = plot_data$direction, label = label) # Makes the plot
+} 
+ 
+discovery <- read_excel("discovery_data.xlsx") # Reads the excel file containing the discovery set
 
-# Choose an allele to plot
-target_allele <- "HLA-B50:01"
+# Runs the permutation function with the discovery set
+run_hla_analysis(
+  data = discovery,
+  time_col = "overall_survival",
+  hla_locus = "B",              # can be "A", "B", or "C" depending on the HLA locus
+  convert_days_to_months = TRUE,
+  p_cutoff = 0.10,
+  label = NULL,
+  num_permutations = 10000,
+  plot_allele = "HLA-B50:01"        # Change to any allele or NULL if you don't want the plot
+)
 
-# Extract observed and permuted median survival for that allele
-obs_value <- observed_median_survival %>%
-  filter(allele == target_allele) %>%
-  pull(median_survival_time)
-
-perm_values <- permuted_median_survivals_df %>%
-  filter(allele == target_allele) %>%
-  pull(median_survival_time)
-
-# Create a density plot with a shaded p-value area
-
-hist(perm_values, 
-     col = rgb(0, 1, 0, 0.3),  # Transparent green
-     border = "black", 
-     prob = TRUE,  # Normalize histogram
-     xlab = paste("Median Survival Time (Permuted) of", target_allele),
-     main = paste("Permutation Test for", target_allele))
-
-dens <- density(perm_values, adjust = 2.5) # Compute density values
-
-lines(dens, col = "darkgreen", lwd = 4) #Draw density curve
-
-polygon(c(dens$x[dens$x >= obs_value], obs_value),  # Shade the area under the curve for values greater (>) or smaller (<) than observed_freq: adjust the sign depending if you are investigating associations with longer or shorter survival times
-        c(dens$y[dens$x >= obs_value], 0),  
-        col = rgb(1, 0, 0, 0.3), border = NA)
-
-abline(v = obs_value, # Add a vertical red dashed line for the observed frequency
-       col = "red", 
-       lwd = 3)
-
-text(x = obs_value*1.1,  # Slightly shift right for better visibility
-     y = max(dens$y) *0.85,  # Adjust height for readability
-     labels = paste("Observed survival time:\n", round(obs_value, 3), 
-                    "\nEmpirical p-value:\n", round(empirical_p_values$p_value[empirical_p_values$allele == target_allele],4)),  
-     col = "red", 
-     cex =0.8,  # Adjust text size
-     
-     adj = c(0, 0))  # Align text to the left
-
-#the same process can be applied to the validation data, but before prepare the dataset
-
-validation <- read_excel("NIHMS980063-supplement-Supplemental_Table_S1.xlsx", sheet = 1)
-validation <- subset(validation, `Cancer Type` == "Melanoma" & `Reference` != "Van Allen et al. 2015")
-
-validation_long <- validation %>%
-  separate_rows(`HLA Class I Alleles`, sep = ",")  # Splits alleles into separate rows
-
-validation_long <- validation_long %>%       # Rename columns for consistency
-  rename(allele = `HLA Class I Alleles`)
-
-validation_long <- validation_long %>%
+# Reads the excel file containing the validation set and adjust it to be able to apply the function
+validation <- read_excel("validation_data.xlsx") %>%
+  filter(`Cancer Type` == "Melanoma", `Drug Class` == "CTLA-4") %>%
+  separate_rows(`HLA Class I Alleles`, sep = ",") %>%
+  rename(allele = `HLA Class I Alleles`) %>%
+  mutate(OS_Months = as.numeric(OS_Months)) %>%
   filter(!is.na(OS_Months))
 
-validation_long <- validation_long %>%
-  mutate(OS_Months = as.numeric(OS_Months))  
-
-# Compute observed median survival time per allele
-observed_median_survival <- validation_long %>%
-  group_by(allele) %>%
-  summarise(median_survival_time = median(OS_Months, na.rm = TRUE)) %>%
-  arrange(desc(median_survival_time))
-
-# Permute the survival times
-set.seed(42)
-num_permutations <- 10000
-permuted_median_survivals <- list()  # Store permuted results
-
-# Permutation loop
-for (i in 1:num_permutations) {
-  # Shuffle survival times
-  permuted_times <- sample(validation_long$OS_Months)
-  permuted_medians <- validation_long %>%
-    mutate(OS_Months = permuted_times) %>%
-    group_by(allele) %>%
-    summarise(median_survival_time = median(OS_Months, na.rm = TRUE))  # Compute median survival per allele after permutation
-  permuted_median_survivals[[i]] <- permuted_medians
-}
-
-# Convert list to a dataframe
-permuted_median_survivals_df <- bind_rows(permuted_median_survivals, .id = "permutation")
-
-# Compute empirical p-values
-empirical_p_values <- observed_median_survival %>%
-  rowwise() %>%
-  mutate(
-    p_value = mean(permuted_median_survivals_df$median_survival_time >= median_survival_time)
-  )
-
-# View significant alleles (p ≤ 0.05)
-significant_results <- empirical_p_values %>%
-  filter(p_value <= 0.05)
-
-print(significant_results)
-
-# Choose an allele to plot
-target_allele <- "B0702"                 
-
-# Extract observed and permuted median survival for that allele
-obs_value <- observed_median_survival %>%
-  filter(allele == target_allele) %>%
-  pull(median_survival_time)
-
-perm_values <- permuted_median_survivals_df %>%
-  filter(allele == target_allele) %>%
-  pull(median_survival_time)
-
-# Create a density plot with a shaded p-value area
-
-hist(perm_values, 
-     col = rgb(0, 1, 0, 0.3),  # Transparent green
-     border = "black", 
-     prob = TRUE,  # Normalize histogram
-     xlab = paste("Median Survival Time (Permuted) of HLA", target_allele),
-     main = paste("Permutation Test for HLA", target_allele))
-
-perm_values <- na.omit(perm_values)
-
-dens <- density(perm_values, adjust = 2.5)
-
-lines(dens, col = "darkgreen", lwd = 4)
-
-polygon(c(dens$x[dens$x >= obs_value], obs_value),  
-        c(dens$y[dens$x >= obs_value], 0),  
-        col = rgb(1, 0, 0, 0.3), border = NA)
-
-abline(v = obs_value, 
-       col = "red", 
-       lwd = 3)
-
-text(x = obs_value*1.11,  # Slightly shift right for better visibility
-     y = max(dens$y) *0.85,  # Adjust height for readability
-     labels = paste("Observed survival time:\n", round(obs_value, 3), 
-                    "\nEmpirical p-value:\n", round(empirical_p_values$p_value[empirical_p_values$allele == target_allele],4)),  
-     col = "red", 
-     cex =0.8,  # Adjust text size
-     
-     adj = c(0, 0))  # Align text to the left
-
+# Runs the permutation function with the validation set
+run_hla_analysis(
+  data = validation,
+  time_col = "OS_Months",
+  allele_column = "allele",
+  p_cutoff = 0.05,
+  label = "HLA-",
+  num_permutations = 10000,
+  plot_allele = "A2901"         # Change to any allele or NULL
+)
