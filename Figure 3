@@ -29,8 +29,8 @@ plot_permutation_density <- function(observed_value, permuted_values, allele_nam
   
   abline(v = observed_value, col = "red", lwd = 3)
   
-  text(x = observed_value * 1.1,
-       y = max(dens$y) * 1.1,
+  text(x = observed_value * 2.0, # Adjust depending on the shape of the density curve
+       y = max(dens$y) * 1.6,
        labels = paste("Observed survival time:\n", round(observed_value, 2),
                       "\nEmpirical p-value:\n", round(p_value, 4)),
        col = "red", cex = 0.8, adj = c(0, 0))
@@ -123,24 +123,25 @@ run_hla_analysis <- function(data,
     plot_data <- empirical %>% filter(allele == plot_allele)
     obs_value <- observed %>% filter(allele == plot_data$allele) %>% pull(median_survival_time) # Gets the observed median survival time for the selected allel
     perm_values <- permuted %>% filter(allele == plot_data$allele) %>% pull(median_survival_time) # Gets all the permuted survival medians for this allele
-  
-  plot_permutation_density(obs_value, perm_values, plot_data$allele, plot_data$p_value, direction = plot_data$direction, label = label) # Makes the plot
-} 
- 
-discovery <- read_excel("discovery_data.xlsx") # Reads the excel file containing the discovery set
+    
+    plot_permutation_density(obs_value, perm_values, plot_data$allele, plot_data$p_value, direction = plot_data$direction, label = label) # Makes the plot
+  }
+}  
 
+discovery <- read_excel("discovery_data.xlsx") # Reads the excel file containing the discovery set
+  
 # Runs the permutation function with the discovery set
 run_hla_analysis(
   data = discovery,
   time_col = "overall_survival",
-  hla_locus = "B",              # can be "A", "B", or "C" depending on the HLA locus
+  hla_locus = "C",              # can be "A", "B", or "C" depending on the HLA locus
   convert_days_to_months = TRUE,
   p_cutoff = 0.10,
   label = NULL,
   num_permutations = 10000,
-  plot_allele = "HLA-B50:01"        # Change to any allele or NULL if you don't want the plot
+  plot_allele = NULL        # Change to any allele or NULL if you don't want the plot
 )
-
+  
 # Reads the excel file containing the validation set and adjust it to be able to apply the function
 validation <- read_excel("validation_data.xlsx") %>%
   filter(`Cancer Type` == "Melanoma", `Drug Class` == "CTLA-4") %>%
@@ -148,7 +149,7 @@ validation <- read_excel("validation_data.xlsx") %>%
   rename(allele = `HLA Class I Alleles`) %>%
   mutate(OS_Months = as.numeric(OS_Months)) %>%
   filter(!is.na(OS_Months))
-
+  
 # Runs the permutation function with the validation set
 run_hla_analysis(
   data = validation,
