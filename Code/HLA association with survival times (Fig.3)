@@ -1,4 +1,4 @@
-# Find if any HLA Class I allele is associated with longer or shorter survival times
+# Figure 3 - Find if any HLA Class I allele is associated with longer or shorter survival times through permutation tests
 
 library(tidyverse)
 library(readxl)
