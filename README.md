@@ -1,13 +1,41 @@
-# Thesis-Project
-This GitHub repository gives information about how to reproduce every figure presented in my thesis report.
+# Thesis–Project
 
-In order to be able to reproduce Figure 3, the permutation test density plots for HLA-A*29:01 and HLA-B*50:01 in both cohorts, follow the "HLA association with survival times (Fig.3)" code. The data needed can be found in discovery_data.xlsx and validation_data.xslx
+This GitHub repository provides all necessary data and instructions to reproduce the figures presented in my thesis report.
 
-In order to be able to reproduce Figure 4, the predicted number of binders for HLA-A*29:01 and HLA-B*50:01 across distinct peptide groups, follow the "Predicted number of binders across distinct peptide groups (Fig.4)" code. The data needed can be found in...
 
-In order to be able to reproduce Figure 5, the comparaison of neoantigen binding affinity predictions from van allen et al. (2015) and our updated predictions, follow the "Comparison of binding affinities predictions (Fig.5)" code with the.
-We got our updated predictions following the "NetpanMHC script" and with that applied the "Updated binding affinities (table)" code.
+### Figure 3 – Permutation Test Density Plots
+To reproduce the density plots showing HLA association with survival times for HLA-A*29:01 and HLA-B*50:01 in both cohorts:
 
-In order to be able to reproduce Figure 6, predicted neoantigen-binding affinity for HLA-A*29:01 and HLA-B*50:01, follow the "Predicted number of binders across distinct peptide groups  (Fig.6)" code. Use the updated binding affinities table.
+- Use the code in: `HLA association with survival times (Fig.3)`
+- Required data: `discovery_data.xlsx`, `validation_data.xlsx`
 
-In order to be able to reproduce Figure 8, the frequencies of HLA alleles in our cohorts, follow "HLA allele frequencies in cohorts (Fig.8)" code, with the discovery_data.xlsx and validation_data.xslx.
+
+### Figure 4 – Predicted Number of Binders
+To reproduce the predicted number of binders for HLA-A*29:01 and HLA-B*50:01 across distinct peptide groups:
+
+- Use the code in: `Predicted number of binders across distinct peptide groups (Fig.4)`
+- Required data: `Binding_peptide_numbers.xlsx`
+
+
+### Figure 5 – Comparison of Neoantigen Binding Affinity Predictions
+To reproduce the comparison between neoantigen binding predictions from Van Allen et al. (2015) and our updated predictions:
+
+- Use the code in: `Comparison of binding affinities predictions (Fig.5)`
+- Required data: `Binding affinity predictions.xlsx`
+- To reproduce the required data, use the code in `Updated binding affinities (table)`, after running the `NetpanMHC script` in the NetpanMHC software
+
+
+### Figure 6 – Predicted Neoantigen Binding Affinity
+To reproduce the neoantigen-binding affinities comparaison between HLA-A*29:01 and HLA-B*50:01:
+
+- Use the code in: `Predicted number of binders across distinct peptide groups (Fig.6)`
+- Required data: `Binding affinity predictions.xlsx`
+
+
+### Figure 8 – HLA Allele Frequencies in Cohorts
+To reproduce the HLA allele frequency bar plots for the discovery and validation cohorts:
+
+- Use the code in: `HLA allele frequencies in cohorts (Fig.8)`
+- Required data: `discovery_data.xlsx`, `validation_data.xlsx`
+
+
