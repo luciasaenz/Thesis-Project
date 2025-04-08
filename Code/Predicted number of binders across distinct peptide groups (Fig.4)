@@ -1,62 +1,65 @@
 # Figure 4 – Compare the number of binder peptides for HLA-A*29:01 and HLA-B*50:01
 
-# Load libraries
+# Load required libraries
 library(readxl)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-# Helper to load and label data from Excel
-load_and_label <- function(file, sheet, group) {
-  df <- read_excel(file, sheet = sheet)
-  
-  df <- df %>%
+# Function to read and label Excel file with data
+load_and_label <- function(file, sheet, group, allele_name) {
+  df <- read_excel(file, sheet = sheet) %>%
     select(
       gene_name = `Gene name`,
-      binders = starts_with("Predicted total binders")
+      !!allele_name := starts_with("Predicted total binders")
     ) %>%
     mutate(group = group)
-  
   return(df)
 }
 
-# Load datasets from cleaned Excel
-file <- "Binding_peptide_numbers.xlsx"
+# Load each dataset
+file <- "/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/github/Binding_peptide_numbers.xlsx"
 
-skin_b50 <- load_and_label(file, "(S)HLA-B5001", "Skin–HLA-B*50:01")
-skin_a29 <- load_and_label(file, "(S)HLA-A2901", "Skin–HLA-A*29:01")
-lung_b50 <- load_and_label(file, "(L)HLA-B5001", "Lung–HLA-B*50:01")
-lung_a29 <- load_and_label(file, "(L)HLA-A2901", "Lung–HLA-A*29:01")
-house_b50 <- load_and_label(file, "(HK)HLA-B5001", "Housekeeping–HLA-B*50:01")
-house_a29 <- load_and_label(file, "(HK)HLA-A2901", "Housekeeping–HLA-A*29:01")
 
-# Create paired subject-wise data
+skin_a29 <- load_and_label(file, "(S)HLA-A2901", "Skin–HLA-A*29:01", "HLA-A*29:01")
+skin_b50 <- load_and_label(file, "(S)HLA-B5001", "Skin–HLA-B*50:01", "HLA-B*50:01")
+lung_a29 <- load_and_label(file, "(L)HLA-A2901", "Lung–HLA-A*29:01", "HLA-A*29:01")
+lung_b50 <- load_and_label(file, "(L)HLA-B5001", "Lung–HLA-B*50:01", "HLA-B*50:01")
+house_a29 <- load_and_label(file, "(HK)HLA-A2901", "Housekeeping–HLA-A*29:01", "HLA-A*29:01")
+house_b50 <- load_and_label(file, "(HK)HLA-B5001", "Housekeeping–HLA-B*50:01", "HLA-B*50:01")
+
+# Function to create paired datasets 
 create_paired_group <- function(a29, b50, group_label) {
   n <- min(nrow(a29), nrow(b50))
-  data.frame(
+  df <- cbind(
     subject = 1:n,
-    A29 = a29$binders[1:n],
-    B50 = b50$binders[1:n],
-    protein_type = group_label
+    a29[1:n, 2],
+    b50[1:n, 2],
+    protein_type = group_label # Skin, Lung, Housekeeping
   )
+  as.data.frame(df)
 }
 
-
+# Create datasets
 skin_df <- create_paired_group(skin_a29, skin_b50, "Skin")
 lung_df <- create_paired_group(lung_a29, lung_b50, "Lung")
 house_df <- create_paired_group(house_a29, house_b50, "Housekeeping")
 
-# Combine and reshape to long format
+# Combine all datasets into a long format
 long_df <- bind_rows(skin_df, lung_df, house_df) %>%
-  pivot_longer(cols = c(A29, B50), names_to = "group", values_to = "binders") %>%
-  mutate(group = recode(group, "A29" = "HLA-A*29:01", "B50" = "HLA-B*50:01"))
+  pivot_longer(
+    cols = c(`HLA-A*29:01`, `HLA-B*50:01`),
+    names_to = "group",
+    values_to = "binders"
+  )
 
-# Run Wilcoxon tests and prepare annotation
+# Wilcoxon test function 
 get_pval <- function(a29, b50) {
   n <- min(nrow(a29), nrow(b50))
-  wilcox.test(a29$binders[1:n], b50$binders[1:n], paired = TRUE)$p.value
+  wilcox.test(a29[[2]][1:n], b50[[2]][1:n], paired = TRUE)$p.value # Returns the p-value of the paired Mann-Whitney U test 
 }
 
+# Calculate p-values and prepare the p-value annotations for plot
 pvals <- data.frame(
   protein_type = c("Skin", "Lung", "Housekeeping"),
   p_value = c(
@@ -97,7 +100,7 @@ ggplot(long_df, aes(x = group, y = binders)) +
   labs(
     x = NULL,
     y = "Predicted binders",
-    title = "Predicted number of binders for HLA-A29:01 and HLA-B50:01\nacross distinct peptide groups"
+    title = "Predicted number of binders for HLA-A*29:01 and HLA-B*50:01\nacross distinct peptide groups"
   ) +
   theme_classic(base_size = 14) +
   theme(
