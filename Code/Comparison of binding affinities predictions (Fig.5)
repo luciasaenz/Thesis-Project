@@ -1,4 +1,4 @@
-# Compare the binding affinities between the updated and Van Allen predictions
+# Figure 5- Compare the binding affinities between the updated and Van Allen predictions
 
 # Load required libraries
 library(readxl)
