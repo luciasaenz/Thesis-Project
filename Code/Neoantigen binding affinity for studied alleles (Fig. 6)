@@ -10,7 +10,7 @@ ba_predictions <- read_excel("Final_BA_predictions_rev.xlsx") # Read the file co
 # Filter data for HLA-A*29:01 and HLA-B*50:01
 affinity_df <- ba_predictions %>%
   filter(Lowest_Affinity_HLA %in% c("HLA-A*29:01", "HLA-B*50:01")) %>%
-  select(allele = Lowest_Affinity_HLA, affinity = Lowest_Affinity_nM)
+  select(allele = Lowest_Affinity_HLA, affinity = Lowest_Affinity_NM)
 
 # Run Wilcoxon test
 wilcox_result <- wilcox.test(
