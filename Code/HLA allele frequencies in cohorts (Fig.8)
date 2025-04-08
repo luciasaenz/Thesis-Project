@@ -8,7 +8,7 @@ library(ggplot2)
 library(scales)
 library(ggtext)
 
-# Function to process allele data
+# Function to process HLA allele data
 process_alleles <- function(alleles_vector, is_validation = FALSE) {
   if (is_validation) {
     alleles_vector <- str_split(alleles_vector, ",", simplify = FALSE) %>% unlist()
@@ -54,7 +54,6 @@ process_alleles <- function(alleles_vector, is_validation = FALSE) {
 }
 
 # Function to plot HLA allele frequencies
-
 plot_hla_frequencies <- function(freq_df, title_text) {
   ggplot(freq_df, aes(x = factor(official_allele, levels = freq_df$official_allele), y = Percent, fill = color)) +
     geom_bar(stat = "identity", width = 0.9) +
