@@ -1,3 +1,6 @@
+Table - Updated Binding Affinities with the latest version of NetMHCpan
+
+
 ## Upload libraries 
 library(dplyr)   
 library(openxlsx) 
@@ -41,7 +44,7 @@ for (patient_id in names(all_patients_raw)) {
   
   # Remove fake neoantigens (e.g., HLAXXXXX)
   selected_data <- selected_data %>%
-    filter(!grepl("^HLAXX", Neoantigen)) 
+    filter(!grepl("^HLAX", Neoantigen)) 
   
   formatted_data <- selected_data %>%
     group_by(Neoantigen) %>%
