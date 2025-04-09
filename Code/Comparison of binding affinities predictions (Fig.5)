@@ -11,7 +11,7 @@ ba_predictions <- read_excel("Final_BA_predictions_rev.xlsx") # Read data
 clean_data <- ba_predictions %>%
   filter(Same_best_HLA == TRUE) %>%
   mutate(
-    affinity_updated = as.numeric(Lowest_Affinity_nM),
+    affinity_updated = as.numeric(Lowest_Affinity_NM),
     affinity_van_allen = as.numeric(affinity_van_Allen)
   ) %>%
   select(affinity_updated, affinity_van_allen) %>%
@@ -41,7 +41,7 @@ plot_data <- tidyr::pivot_longer(
   values_to = "affinity"
 ) %>%
   mutate(source = recode(source,
-                         affinity_van_allen = "Van Allen et. al. predictions",
+                         affinity_van_allen = "Van Allen et al. (2015) predictions",
                          affinity_updated = "Updated predictions"))
 
 # Annotation for significance
@@ -57,7 +57,7 @@ pvals <- data.frame(
 ggplot(plot_data, aes(x = source, y = affinity, fill = source)) +
   geom_boxplot(width = 0.1, outlier.shape = NA) +
   stat_summary(fun = median, geom = "crossbar", width = 0.4, color = "black", size = 0.5) +
-  scale_fill_manual(values = c("Van Allen et. al. predictions" = "#fc8d62", "Updated predictions" = "#fc8d62")) +
+  scale_fill_manual(values = c("Van Allen et al. (2015) predictions" = "#fc8d62", "Updated predictions" = "#fc8d62")) +
   coord_cartesian(ylim = c(0, 3000)) +
   labs(
     x = NULL,
