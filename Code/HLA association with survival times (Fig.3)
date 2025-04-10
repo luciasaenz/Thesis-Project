@@ -4,15 +4,22 @@ library(tidyverse)
 library(readxl)
 
 # Plot Function
+
 plot_permutation_density <- function(observed_value, permuted_values, allele_name, p_value, direction = "greater", label = "HLA") {
   permuted_values <- na.omit(permuted_values)
+  
+  # Increase left margin to prevent Y-axis label cutoff
+  old_par <- par(no.readonly = TRUE)
+  on.exit(par(old_par))
+  par(mar = c(5, 6, 4, 2))  # Bottom, left, top, right
   
   hist(permuted_values,
        col = rgb(0, 1, 0, 0.3),
        border = "black",
        prob = TRUE,
-       xlab = paste("Median Survival Time (Permuted) of", paste(label, allele_name)),
-       main = paste("Permutation Test for", paste(label, allele_name)))
+       xlab = paste("Median permuted survival time for", paste(label, allele_name), "in months "),
+       main = paste("Permutation test for", paste(label, allele_name)),
+       cex.axis = 1.5, cex.lab = 1.8, cex.main = 2)
   
   dens <- density(permuted_values, adjust = 2.5)
   lines(dens, col = "darkgreen", lwd = 4)
@@ -27,14 +34,16 @@ plot_permutation_density <- function(observed_value, permuted_values, allele_nam
             col = rgb(1, 0, 0, 0.3), border = NA)
   }
   
-  abline(v = observed_value, col = "red", lwd = 3)
+  abline(v = observed_value, col = "#B00000", lwd = 3)  # Darker but still true red
   
-  text(x = observed_value * 2.0, # Adjust depending on the shape of the density curve
-       y = max(dens$y) * 1.6,
-       labels = paste("Observed survival time:\n", round(observed_value, 2),
-                      "\nEmpirical p-value:\n", round(p_value, 4)),
-       col = "red", cex = 0.8, adj = c(0, 0))
+  text(x = observed_value * 0.75, # Adjust this depending on your density curve 
+       y = max(dens$y) *1,    # Adjust this depending on your density curve 
+       labels = paste("Observed survival\n time:", round(observed_value, 0), "months",
+                      "\n\nEmpirical\n p-value:", round(p_value, 2)),
+       col = "#B00000", cex = 1.5, adj = c(0.5, 0.5), font = 2)  # Bigger, bold, and redder
 }
+
+
 
 # Permutation Median Function
 get_permuted_medians <- function(data, time_col, allele_col, num_permutations = 10000) {
