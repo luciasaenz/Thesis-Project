@@ -1,4 +1,4 @@
-# Figure 8 - Plotting the relative frequencies of each HLA Class I allele in both discovery and validation cohorts
+# Figure 7 - Plotting the relative frequencies of each HLA Class I allele in both discovery and validation cohorts
 
 # Load necessary libraries
 library(readxl)
