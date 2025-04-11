@@ -1,0 +1,68 @@
+# Figure 5.B - Compare the neoantigen binding affinities for HLA-A*29:01 and HLA-B*50:01
+
+# Load libraries needed
+library(readxl)
+library(dplyr)
+library(ggplot2)
+
+ba_predictions <- read_excel("Final_BA_predictions_rev.xlsx") # Read the file containing the updated binding predictions
+
+# Filter data for HLA-A*29:01 and HLA-B*50:01
+affinity_df <- ba_predictions %>%
+  filter(Lowest_Affinity_HLA %in% c("HLA-A*29:01", "HLA-B*50:01")) %>%
+  select(allele = Lowest_Affinity_HLA, affinity = Lowest_Affinity_NM)
+
+# Run Wilcoxon test
+wilcox_result <- wilcox.test(
+  affinity_df$affinity[affinity_df$allele == "HLA-B*50:01"],
+  affinity_df$affinity[affinity_df$allele == "HLA-A*29:01"],
+  alternative = "greater"
+)
+
+# Helper function to assign stars based on p-value
+pval_to_stars <- function(p) {
+  if (p <= 0.001) return("***")
+  else if (p <= 0.01) return("**")
+  else if (p <= 0.05) return("*")
+  else return("ns")
+}
+
+# Prepare annotation
+pval_annot <- data.frame(
+  x_start = 1,
+  x_end = 2,
+  y = max(affinity_df$affinity) + 500,
+  label = pval_to_stars(wilcox_result$p.value)
+)
+
+# Visualize the results
+ggplot(affinity_df, aes(x = allele, y = affinity, fill = allele)) +
+  geom_violin(trim = FALSE, width = 0.9, color = NA) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.4, color = "black") +
+  coord_cartesian(ylim = c(0, max(affinity_df$affinity) + 1000)) +
+  scale_fill_manual(values = c("HLA-B*50:01" = "#fc8d62", "HLA-A*29:01" = "#fc8d62")) +
+  labs(
+    x = NULL,
+    y = "Predicted binding affinity (nM)",
+    title = "Binding affinity comparison between \nHLA-A*29:01 and HLA-B*50:01"
+  ) +
+  geom_segment(data = pval_annot,
+               aes(x = x_start, xend = x_end, y = y, yend = y),
+               size = 0.8, inherit.aes = FALSE) +
+  geom_segment(data = pval_annot,
+               aes(x = x_start, xend = x_start, y = y, yend = y - 100),
+               size = 0.8, inherit.aes = FALSE) +
+  geom_segment(data = pval_annot,
+               aes(x = x_end, xend = x_end, y = y, yend = y - 100),
+               size = 0.8, inherit.aes = FALSE) +
+  geom_text(data = pval_annot,
+            aes(x = (x_start + x_end)/2, y = y + 50, label = label),
+            size = 6, inherit.aes = FALSE) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.ticks.length = unit(0.25, "cm"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "none"
+  )
+
+

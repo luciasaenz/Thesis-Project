@@ -17,7 +17,7 @@ To reproduce the predicted number of binders for HLA-A*29:01 and HLA-B*50:01 acr
 - Required data: `Binding_peptide_numbers.xlsx`
 
 
-### Figure 5 – Comparison of Neoantigen Binding Affinity Predictions
+### Figure 5.A – Comparison of Neoantigen Binding Affinity Predictions
 To reproduce the comparison between neoantigen binding predictions from Van Allen et al. (2015) and our updated predictions:
 
 - Use the code in: `Comparison of binding affinities predictions (Fig.5)`
@@ -25,14 +25,14 @@ To reproduce the comparison between neoantigen binding predictions from Van Alle
 - To reproduce the required data, use the code in `Updated binding affinities (table)`, after running the `NetpanMHC script` in the NetpanMHC software. For that, you will need the neoantigens and HLA sets per patient that can be found in `tables4_revised.csv`and `discovery_data.xlsx` respectively.
 
 
-### Figure 6 – Predicted Neoantigen Binding Affinity
+### Figure 5.B – Predicted Neoantigen Binding Affinity
 To reproduce the neoantigen-binding affinities comparaison between HLA-A*29:01 and HLA-B*50:01:
 
 - Use the code in: `Predicted number of binders across distinct peptide groups (Fig.6)`
 - Required data: `Binding affinity predictions.xlsx`
 
 
-### Figure 8 – HLA Allele Frequencies in Cohorts
+### Figure 7 – HLA Allele Frequencies in Cohorts
 To reproduce the HLA allele frequency bar plots for the discovery and validation cohorts:
 
 - Use the code in: `HLA allele frequencies in cohorts (Fig.8)`

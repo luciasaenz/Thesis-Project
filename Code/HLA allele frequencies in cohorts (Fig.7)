@@ -1,0 +1,99 @@
+# Figure 7 - Plotting the relative frequencies of each HLA Class I allele in both discovery and validation cohorts
+
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(scales)
+library(ggtext)
+
+# Function to process allele data
+process_alleles <- function(alleles_vector, is_validation = FALSE) {
+  if (is_validation) {
+    alleles_vector <- str_split(alleles_vector, ",", simplify = FALSE) %>% unlist()
+  }
+  
+  as.data.frame(table(alleles_vector)) %>%
+    mutate(
+      Freq = as.numeric(Freq),
+      Percent = Freq / sum(Freq) * 100, # Relative HLA-allele frequency 
+      alleles = toupper(alleles_vector),
+      
+      # Proper official formatting of HLA names (i.e: HLA-A*29:01)
+      official_allele = case_when(
+        grepl("^HLA-[ABC]\\d{2}:\\d{2}$", alleles) ~ {
+          prefix <- substr(alleles, 1, 5)       # "HLA-A"
+          suffix <- substr(alleles, 6, nchar(alleles))  # "29:01"
+          paste0(prefix, "*", suffix) # "*" between gene name and allele
+        },
+        grepl("^[ABC]\\d{4}$", alleles) ~ paste0(
+          "HLA-", substr(alleles, 1, 1), "*",
+          substr(alleles, 2, 3), ":", substr(alleles, 4, 5)
+        ),
+        TRUE ~ NA_character_
+      ),
+      
+      color = case_when(
+        official_allele == "HLA-A*29:01" ~ "#B00000",     # Color in red the bar corresponding to the allele associated with short survival after ICB treatment 
+        official_allele == "HLA-B*50:01" ~ "darkgreen", # Color in green the bar corresponding to the allele associated with long survival after ICB treatment 
+        TRUE ~ "#56B4E9"                              # The rest of bars will be colored in blue
+      ),
+      label_color = case_when(
+        official_allele == "HLA-A*29:01" ~ "#B00000",     # Color in red the label corresponding to the allele associated with short survival after ICB treatment 
+        official_allele == "HLA-B*50:01" ~ "darkgreen", # Color in green the label corresponding to the allele associated with long survival after ICB treatment 
+        TRUE ~ "black"                                # The rest of labels will be colored in black
+      ),
+      label_html = case_when(
+        official_allele == "HLA-A*29:01" ~ paste0("<span style='color:red'><b>", official_allele, "</b></span>"),
+        official_allele == "HLA-B*50:01" ~ paste0("<span style='color:#228B22'><b>", official_allele, "</b></span>"),
+        TRUE ~ paste0("<span style='color:black'>", official_allele, "</span>")
+      )
+    ) %>%
+    arrange(desc(Percent)) # Arrange the plot to have the higher frequency alleles first, and then the alleles with lower frequency
+}
+
+# Function to plot HLA allele frequencies
+plot_hla_frequencies <- function(freq_df, title_text) {
+  ggplot(freq_df, aes(x = factor(official_allele, levels = freq_df$official_allele), y = Percent, fill = color)) +
+    geom_bar(stat = "identity", width = 0.8) +  
+    scale_y_continuous(
+      labels = percent_format(scale = 1),
+      expand = c(0, 0),
+      limits = c(0, max(freq_df$Percent) * 1.05)
+    ) +
+    scale_x_discrete(labels = freq_df$label_html, expand = c(0, 0)) +
+    scale_fill_identity() +
+    labs(
+      x = "HLA Class I Alleles",
+      y = "Relative Frequency (%)",
+      title = title_text
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_classic(base_size = 14) +
+    theme(
+      axis.text.x = element_markdown(
+        angle = 90,
+        hjust = 1,
+        vjust = 0.5,
+        size = 13  # Increased label size
+      ),
+      axis.text.y = element_text(color = "black", size = 13), 
+      axis.title = element_text(face = "bold", size = 15),
+      plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
+      plot.margin = margin(10, 10, 40, 10)  
+    )
+}
+
+# Apply the functions to the discovery cohort
+discovery <- read_excel("/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/github/discovery_data.xlsx") # Read the file
+hla_cols <- discovery %>% select(`hla.a1`, `hla.a2`, `hla.b1`, `hla.b2`, `hla.c1`, `hla.c2`) # Select the HLA-columns
+discovery_alleles <- unlist(hla_cols)
+discovery_freq <- process_alleles(discovery_alleles)
+plot_hla_frequencies(discovery_freq, "Relative Frequency of HLA Alleles in the Discovery Cohort")
+
+# Do the same for the validation cohort
+validation <- read_excel("/Users/User1/Desktop/MBLS_3_year/Thesis/1st_paper/github/validation_data.xlsx")
+validation_freq <- process_alleles(validation$`HLA Class I Alleles`, is_validation = TRUE)
+plot_hla_frequencies(validation_freq, "Relative Frequency of HLA Alleles in the Validation Cohort")
+
