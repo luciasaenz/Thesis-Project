@@ -22,7 +22,7 @@ To reproduce the comparison between neoantigen binding predictions from Van Alle
 
 - Use the code in: `Comparison of binding affinities predictions (Fig.5)`
 - Required data: `Binding affinity predictions.xlsx`
-- To reproduce the required data, use the code in `Updated binding affinities (table)`, after running the `NetpanMHC script` in the NetpanMHC software. For that, you will need the neoantigens and HLA sets per patient that can be found in `tables4_revised.csv`and `discovery_data.xlsx` respectively.
+- To reproduce the required data, use the code in `Updated binding affinities (table)`, after running the `NetpanMHC script` in the NetpanMHC software. For that, you will need the neoantigens and HLA sets per patient that can be found in `tables4_revised.csv` (Van Allen et al., 2015) and `discovery_data.xlsx` respectively.
 
 
 ### Figure 5.B – Predicted Neoantigen Binding Affinity
