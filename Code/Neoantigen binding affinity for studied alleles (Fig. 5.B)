@@ -1,4 +1,4 @@
-# Figure 6 - Compare the neoantigen binding affinities for HLA-A*29:01 and HLA-B*50:01
+# Figure 5.B - Compare the neoantigen binding affinities for HLA-A*29:01 and HLA-B*50:01
 
 # Load libraries needed
 library(readxl)
